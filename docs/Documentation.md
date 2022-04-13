@@ -285,6 +285,7 @@ Some parameters are unused depending on platform.
 | options.rewindIcon | [Resource Object](#resource-object) | The jump backward icon¹ | ✓ | ✗ | ✗ |
 | options.forwardIcon | [Resource Object](#resource-object) | The jump forward icon¹ | ✓ | ✗ | ✗ |
 | options.color | `number` | The notification color in an ARGB hex | ✓ | ✗ | ✗ |
+| options.progressUpdateEventInterval | `number` | The interval (in seconds) that the `Event.PlaybackProgressUpdated` will be fired. `undefined` by default. | ✓ | ✓ | ✗ |
 
 *¹ - The custom icons will only work in release builds*
 
@@ -497,6 +498,19 @@ Fired when the current track receives metadata encoded in. (e.g. ID3 tags, Icy M
 | album    | `string` | The track album. Might be null                      |
 | date     | `string` | The track date. Might be null                       |
 | genre    | `string` | The track genre. Might be null                      |
+
+#### `Event.PlaybackProgressUpdated`
+
+:warning: Note: This event is only emitted if you specify a non-zero `progressUpdateEventInterval` value in your player options.
+
+Fired at the `progressUpdateEventInterval` if the player is playing _and_ if a `progressUpdateEventInterval` has been specified.
+
+| Param    | Type     | Description       |
+| -------- | -------- | ----------------- |
+| position | `number` | See [`getPosition`](#getposition)                 |
+| duration | `number` | See [`getDuration`](#getduration)                 |
+| buffer   | `number` | See [`getBufferedPosition`](#getbufferedPostion)  |
+| track    | `Track`  | The Track object you passed. See [Track Object](#track-object) |
 
 #### `Event.PlaybackError`
 Fired when an error occurs.

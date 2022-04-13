@@ -19,16 +19,18 @@ import com.doublesymmetry.trackplayer.utils.Utils.setRating
 import com.facebook.react.HeadlessJsTaskService
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
+import com.facebook.react.bridge.WritableMap
 import com.facebook.react.jstasks.HeadlessJsTaskConfig
-import kotlinx.coroutines.MainScope
-import kotlinx.coroutines.cancel
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.flow
 import java.util.concurrent.TimeUnit
 
 class MusicService : HeadlessJsTaskService() {
     private lateinit var player: QueuedAudioPlayer
     private val scope = MainScope()
+    private var progressUpdateJob: Job? = null
 
     var stopWithApp = false
         private set
@@ -178,8 +180,53 @@ class MusicService : HeadlessJsTaskService() {
                 player.notificationManager.createNotification(notificationConfig)
             }
         }
+
+        // publish progress update events if its configured
+        cancelProgressUpdateJob()
+        progressUpdateJob = scope.launch {
+            attemptProgressUpdateEvent(options)
+        }
     }
 
+    private fun progressUpdateEventFlow(interval: Long): Flow<Bundle> = flow {
+        while (true) {
+            if (player.isPlaying) {
+                val bundle = progressUpdateEvent()
+                if (bundle != null) {
+                    emit(bundle)
+                }
+            }
+
+            delay(interval * 1000)
+        }
+    }
+
+    private suspend fun attemptProgressUpdateEvent(options: Bundle) {
+        val updateInterval = Utils.getIntOrNull(options, PROGRESS_UPDATE_EVENT_INTERVAL_KEY)
+        if (updateInterval != null && updateInterval > 0) {
+            progressUpdateEventFlow(updateInterval.toLong()).collect {
+                emit(MusicEvents.PLAYBACK_PROGRESS_UPDATED, it)
+            }
+        }
+    }
+
+    private fun progressUpdateEvent(): Bundle? {
+        // build event payload
+        val payload: WritableMap = Arguments.createMap()
+        getPositionInSeconds { payload.putDouble("position", it) }
+        getDurationInSeconds { payload.putDouble("duration", it) }
+        getBufferedPositionInSeconds { payload.putDouble("buffer", it) }
+        payload.putMap("track", Arguments.fromBundle(currentTrack.originalItem))
+
+        return Arguments.toBundle(payload)
+    }
+
+    private fun cancelProgressUpdateJob() {
+        if (progressUpdateJob is Job) {
+            progressUpdateJob!!.cancel()
+            progressUpdateJob = null
+        }
+    }
     private fun getPendingIntentFlags(): Int {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_CANCEL_CURRENT
@@ -474,6 +521,7 @@ class MusicService : HeadlessJsTaskService() {
 
         const val FORWARD_JUMP_INTERVAL_KEY = "forwardJumpInterval"
         const val BACKWARD_JUMP_INTERVAL_KEY = "backwardJumpInterval"
+        const val PROGRESS_UPDATE_EVENT_INTERVAL_KEY = "progressUpdateEventInterval"
 
         const val MAX_CACHE_SIZE_KEY = "maxCacheSize"
 

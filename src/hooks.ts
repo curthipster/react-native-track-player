@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 
 import TrackPlayer from './trackPlayer'
-import { State, Event } from './interfaces'
+import { State, Event, ProgressState } from './interfaces'
 
 /** Get current playback state and subsequent updatates  */
 export const usePlaybackState = () => {
@@ -76,12 +76,6 @@ export const useTrackPlayerEvents = (events: Event[], handler: Handler) => {
 
     return () => subs.forEach(sub => sub.remove())
   }, [events])
-}
-
-export interface ProgressState {
-  position: number
-  duration: number
-  buffered: number
 }
 
 /**

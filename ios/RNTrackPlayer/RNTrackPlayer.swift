@@ -18,6 +18,7 @@ public class RNTrackPlayer: RCTEventEmitter, AudioSessionControllerDelegate {
     private var hasInitialized = false
     private let player = QueuedAudioPlayer()
     private let audioSessionController = AudioSessionController.shared
+    private var progressUpdatedEventTimer: Timer?
 
     // MARK: - Lifecycle Methods
 
@@ -93,6 +94,7 @@ public class RNTrackPlayer: RCTEventEmitter, AudioSessionControllerDelegate {
             "playback-error",
             "playback-track-changed",
             "playback-metadata-received",
+            "playback-progress-updated",
 
             "remote-stop",
             "remote-pause",
@@ -108,9 +110,9 @@ public class RNTrackPlayer: RCTEventEmitter, AudioSessionControllerDelegate {
             "remote-bookmark",
         ]
     }
-    
+
     // MARK: - AudioSessionControllerDelegate
-    
+
     public func handleInterruption(type: InterruptionType) {
         switch type {
         case .began:
@@ -172,13 +174,13 @@ public class RNTrackPlayer: RCTEventEmitter, AudioSessionControllerDelegate {
             let mappedCategoryMode = SessionCategoryMode(rawValue: sessionCategoryModeStr) {
             sessionCategoryMode = mappedCategoryMode.mapConfigToAVAudioSessionCategoryMode()
         }
-        
+
         if
             let sessionCategoryPolicyStr = config["iosCategoryPolicy"] as? String,
             let mappedCategoryPolicy = SessionCategoryPolicy(rawValue: sessionCategoryPolicyStr) {
             sessionCategoryPolicy = mappedCategoryPolicy.mapConfigToAVAudioSessionCategoryPolicy()
         }
-        
+
         let sessionCategoryOptsStr = config["iosCategoryOptions"] as? [String]
         let mappedCategoryOpts = sessionCategoryOptsStr?.compactMap { SessionCategoryOptions(rawValue: $0)?.mapConfigToAVAudioSessionCategoryOptions() } ?? []
         sessionCategoryOptions = AVAudioSession.CategoryOptions(mappedCategoryOpts)
@@ -316,7 +318,45 @@ public class RNTrackPlayer: RCTEventEmitter, AudioSessionControllerDelegate {
                                           bookmarkOptions: options["bookmarkOptions"] as? [String: Any])
         }
 
+        self.attemptProgressUpdateEvent(options)
         resolve(NSNull())
+    }
+
+    private func attemptProgressUpdateEvent(_ options: [String: Any]) {
+        // cancel existing timer
+        self.cancelProgressUpdateEvent()
+
+        let progressUpdateEventInterval = options["progressUpdateEventInterval"] as? NSNumber ?? nil
+
+        guard let interval = progressUpdateEventInterval else { return }
+
+        DispatchQueue.main.async {
+            self.progressUpdatedEventTimer = Timer.scheduledTimer(
+                withTimeInterval: interval.doubleValue,
+                repeats: true
+            ) { _ in self.progressUpdateEvent() }
+        }
+    }
+
+    private func progressUpdateEvent() {
+        if (player.playerState == .playing) {
+            let track = player.items[player.currentIndex] as! Track
+            sendEvent(
+                withName: "playback-progress-updated",
+                body: [
+                    "position": player.currentTime,
+                    "duration": player.duration,
+                    "buffered": player.bufferedPosition,
+                    "track": track.toObject(),
+                ]
+            )
+        }
+    }
+
+    private func cancelProgressUpdateEvent() {
+      guard let timer = self.progressUpdatedEventTimer else { return }
+      timer.invalidate()
+      self.progressUpdatedEventTimer = nil
     }
 
     @objc(add:before:resolver:rejecter:)
@@ -717,7 +757,7 @@ public class RNTrackPlayer: RCTEventEmitter, AudioSessionControllerDelegate {
         // SwiftAudioEx was updated to return the array of timed metadata
         // Until we have support for that in RNTP, we take the first item to keep existing behaviour.
         let metadata = metadata.first?.items ?? []
-        
+
         func getMetadataItem(forIdentifier: AVMetadataIdentifier) -> String {
             return AVMetadataItem.metadataItems(from: metadata, filteredByIdentifier: forIdentifier).first?.stringValue ?? ""
         }
