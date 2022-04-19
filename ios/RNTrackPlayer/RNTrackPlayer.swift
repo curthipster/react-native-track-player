@@ -788,17 +788,43 @@ public class RNTrackPlayer: RCTEventEmitter, AudioSessionControllerDelegate {
     }
 
     func handleAudioPlayerPlaybackEnded(reason: PlaybackEndedReason) {
+        let isRepeatModeOff = player.repeatMode == .off
+        let isPlayedUntilEnd = reason == PlaybackEndedReason.playedUntilEnd
+
         // fire an event for the queue ending
-        if player.nextItems.count == 0 && reason == PlaybackEndedReason.playedUntilEnd {
+        if isRepeatModeOff && isPlayedUntilEnd {
             sendEvent(withName: "playback-queue-ended", body: [
                 "track": player.currentIndex,
                 "position": player.currentTime,
             ])
         }
 
-        // fire an event for the same track starting again
-        if player.items.count != 0 && player.repeatMode == .track {
-            handleAudioPlayerQueueIndexChange(previousIndex: player.currentIndex, nextIndex: player.currentIndex)
+        // currently a player.event.queueIndex are only called at the end of a
+        // queue in one scenario, which is a multi-track queue with
+        // repeatMode = .queue (see https://github.com/doublesymmetry/react-native-track-player/pull/1482#issuecomment-1104064853)
+        // for more detail. As a result, in all other scenarios we need to call
+        // `handleAudioPlayerQueueIndexChange` here, when the queue playback
+        // has ended.
+        let isQueueEmpty = player.items.count <= 0
+        let isMultiItemQueue = player.items.count > 1
+        let isRepeatModeQueue = player.repeatMode == .queue
+        // per above, exclude the case where `handleAudioPlayerQueueIndexChange`
+        // is called as a result of a `player.event.queueIndex` event
+        let isIndexChangeNativelyCalled = isMultiItemQueue && isRepeatModeQueue
+
+        if !isQueueEmpty && !isIndexChangeNativelyCalled && isPlayedUntilEnd {
+            var nextIndex: Int? = player.currentIndex
+
+            if isRepeatModeOff {
+                nextIndex = nil
+            } else if isRepeatModeQueue {
+                nextIndex = 0
+            }
+
+            handleAudioPlayerQueueIndexChange(
+                previousIndex: player.currentIndex,
+                nextIndex: nextIndex
+            )
         }
     }
 
