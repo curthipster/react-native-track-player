@@ -115,6 +115,12 @@ const App = () => {
     }
   }, [isPlaying, index]);
 
+  useTrackPlayerEvents(
+    [Event.PlaybackTrackChanged, Event.PlaybackQueueEnded],
+    async event => {
+      console.log(`${event.type} (hook)`, event);
+    },
+  );
 
   return (
     <SafeAreaView style={styles.screenContainer}>
