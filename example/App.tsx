@@ -60,7 +60,7 @@ const setupPlayer = async () => {
         duration: 28,
       },
     ]);
-    await TrackPlayer.setRepeatMode(RepeatMode.Queue);
+    await TrackPlayer.setRepeatMode(RepeatMode.Off);
   } finally {
     return index;
   }
